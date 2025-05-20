@@ -2,7 +2,22 @@
 // x & y are static variables
 
 // Put your code here.
+// Compare x to 0
+push static 0       // push x
+push constant 0     // push 0
+lt                  // if x < 0, push 1; else push 0
+if-goto NEGATIVE    // jump to NEGATIVE if x < 0
 
+// x ≥ 0 case: y = x
+push static 0       // push x
+pop static 1        // y = x
+goto END            // done
+
+label NEGATIVE
+// x < 0 case: y = –x
+push static 0       // push x
+neg                 // compute –x
+pop static 1        // y = –x
 
 
 label END
