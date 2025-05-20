@@ -4,7 +4,39 @@
 
 // Put your code here.
 
+// 1 Initialize result a = 0
+push constant 0
+pop local 0
 
+// 2 Load counter = y into local[1]
+push static 1
+pop local 1
+
+// 3 Loop: while (counter != 0) do { a += x; counter--; }
+label MULT_LOOP
+  // if (counter == 0) goto MULT_END
+  push local 1
+  push constant 0
+  eq
+  if-goto MULT_END
+
+  // a = a + x
+  push local 0
+  push static 0
+  add
+  pop local 0
+
+  // counter = counter - 1
+  push local 1
+  push constant 1
+  sub
+  pop local 1
+
+  // repeat
+  goto MULT_LOOP
+
+label MULT_END
+// 4 Halt in an infinite loop so the emulator can inspect local[0]
 
 label END
 goto END
