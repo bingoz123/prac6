@@ -2,4 +2,56 @@
 // n is supplied as an argument
 
 // Put your code here.
+// Fib.vm
 
+// Fib.vm
+// 1 Bootstrap entrypoint: Fib.init
+// 2 Recursive function: Fib.fib(n)
+
+// --- Bootstrap: Fib.init ---
+function Fib.init 0
+  // (your .tst will initialize SP,LCL,ARG,THIS,THAT)
+  push static 1       // push y
+  call Fib.fib 1      // compute Fib.fib(y)
+  pop static 0        // store result in x
+label Fib.init$END
+  goto Fib.init$END   // infinite loop to halt
+
+// --- Fib.fib(n) ---
+function Fib.fib 0
+
+// if n == 0 return 0
+push argument 0
+push constant 0
+eq
+if-goto Fib.fib$IS_ZERO
+
+// if n == 1 return 1
+push argument 0
+push constant 1
+eq
+if-goto Fib.fib$IS_ONE
+
+// else compute Fib(n-1)
+push argument 0
+push constant 1
+sub
+call Fib.fib 1
+
+// then Fib(n-2)
+push argument 0
+push constant 2
+sub
+call Fib.fib 1
+
+// add and return
+add
+return
+
+label Fib.fib$IS_ZERO
+push constant 0
+return
+
+label Fib.fib$IS_ONE
+push constant 1
+return
