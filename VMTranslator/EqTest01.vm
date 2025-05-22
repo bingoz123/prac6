@@ -1,0 +1,5 @@
+// EqTest01.vm – push two equal constants, eq, pop result to static 0
+push constant 42
+push constant 42
+eq
+pop static 0

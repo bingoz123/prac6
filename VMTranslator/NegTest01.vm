@@ -1,0 +1,5 @@
+// NegTest01.vm
+// push a constant, negate it, store in static 1
+push constant 9
+neg
+pop static 1
