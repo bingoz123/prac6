@@ -1,0 +1,5 @@
+// TranslatorTest06.vm — Test double neg: –(–3) ⇒ static 5
+push constant 3
+neg
+neg
+pop static 5

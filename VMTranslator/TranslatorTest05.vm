@@ -1,5 +1,4 @@
-// EqTest01.vm – push two equal constants, eq, pop result to static 0
-push constant 42
-push constant 42
-eq
-pop static 0
+// TranslatorTest05.vm — Test neg: –7 ⇒ static 4
+push constant 7
+neg
+pop static 4

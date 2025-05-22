@@ -1,5 +1,7 @@
-// NegTest01.vm
-// push a constant, negate it, store in static 1
-push constant 9
-neg
-pop static 1
+// TranslatorTest04.vm — Test sub chain: (20 – 5) – 3 ⇒ static 3
+push constant 20
+push constant 5
+sub
+push constant 3
+sub
+pop static 3

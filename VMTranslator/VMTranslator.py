@@ -1,95 +1,168 @@
 #!/usr/bin/env python3
-# VMTranslator.py
-
 import sys
 
 class VMTranslator:
-    SEG = {
-        'local': 'LCL',
-        'argument': 'ARG',
-        'this': 'THIS',
-        'that': 'THAT',
-        'temp': 5,
-        'pointer': 3,
-        'static': 16
-    }
+    label_counter = 0
 
     @staticmethod
-    def vm_push(segment, index):
-        asm = []
-        if segment == 'constant':
-            asm += [f"@{index}", "D=A"]
-        elif segment in ('local','argument','this','that'):
-            base = VMTranslator.SEG[segment]
-            asm += [f"@{base}", "D=M", f"@{index}", "A=D+A", "D=M"]
-        elif segment in ('temp','pointer'):
-            addr = VMTranslator.SEG[segment] + int(index)
-            asm += [f"@{addr}", "D=M"]
-        elif segment == 'static':
-            addr = VMTranslator.SEG['static'] + int(index)
-            asm += [f"@{addr}", "D=M"]
-        asm += ["@SP","A=M","M=D","@SP","M=M+1"]
-        return '\n'.join(asm)
+    def unique(label):
+        VMTranslator.label_counter += 1
+        return f"{label}${VMTranslator.label_counter}"
 
     @staticmethod
-    def vm_pop(segment, index):
-        asm = []
-        if segment in ('local','argument','this','that'):
-            base = VMTranslator.SEG[segment]
-            asm += [
-                f"@{base}", "D=M", f"@{index}", "D=D+A", "@R13","M=D",
-                "@SP","AM=M-1","D=M","@R13","A=M","M=D"
-            ]
-        elif segment in ('temp','pointer'):
-            addr = VMTranslator.SEG[segment] + int(index)
-            asm += ["@SP","AM=M-1","D=M",f"@{addr}","M=D"]
-        elif segment == 'static':
-            addr = VMTranslator.SEG['static'] + int(index)
-            asm += ["@SP","AM=M-1","D=M",f"@{addr}","M=D"]
-        return '\n'.join(asm)
+    def vm_add():
+        return "\n".join([
+            "@SP",      # SP--
+            "AM=M-1",   #   SP = SP-1; A = SP
+            "D=M",      #   D = *SP  (y)
+            "A=A-1",    #   A = SP-1 (address of x)
+            "M=M+D"     #   * (SP-1) = x + y
+        ])
+
+    @staticmethod
+    def vm_sub():
+        return "\n".join([
+            "@SP",
+            "AM=M-1",
+            "D=M",      # D = y
+            "A=A-1",
+            "M=M-D"     # x - y
+        ])
+
+    @staticmethod
+    def vm_neg():
+        return "\n".join([
+            "@SP",
+            "A=M-1",    # A = SP-1
+            "M=-M"      # *SP = -*SP
+        ])
 
     @staticmethod
     def vm_eq():
-        # pop y; pop x; push (x==y ? -1 : 0)
-        return '\n'.join([
-            "@SP","AM=M-1","D=M",      # D=y
-            "A=A-1","D=M-D",          # D=x-y
-            "@EQ_TRUE","D;JEQ",       # if zero jump
-            "@SP","A=M-1","M=0",      # else *SP-1 = false(0)
-            "@EQ_END","0;JMP",
-            "(EQ_TRUE)",
-            "@SP","A=M-1","M=-1",     # true(-1)
-            "(EQ_END)"
+        t = VMTranslator.unique("EQ_TRUE")
+        e = VMTranslator.unique("EQ_END")
+        return "\n".join([
+            "@SP",
+            "AM=M-1",
+            "D=M",      # D = y
+            "A=A-1",
+            "D=M-D",    # x - y
+            f"@{t}",
+            "D;JEQ",    # if zero, jump EQ_TRUE
+            "@SP",
+            "A=M-1",
+            "M=0",      # false
+            f"@{e}",
+            "0;JMP",
+            f"({t})",
+            "@SP",
+            "A=M-1",
+            "M=-1",     # true
+            f"({e})"
         ])
 
     @staticmethod
     def vm_gt():
-        # pop y; pop x; push (x>y ? -1 : 0)
-        return '\n'.join([
-            "@SP","AM=M-1","D=M",      # D=y
-            "A=A-1","D=M-D",          # D=x-y
-            "@GT_TRUE","D;JGT",       # if >0 jump
-            "@SP","A=M-1","M=0",      # else false
-            "@GT_END","0;JMP",
-            "(GT_TRUE)",
-            "@SP","A=M-1","M=-1",     # true
-            "(GT_END)"
+        t = VMTranslator.unique("GT_TRUE")
+        e = VMTranslator.unique("GT_END")
+        return "\n".join([
+            "@SP",
+            "AM=M-1",
+            "D=M",      # D = y
+            "A=A-1",
+            "D=M-D",    # x - y
+            f"@{t}",
+            "D;JGT",    # if >0
+            "@SP",
+            "A=M-1",
+            "M=0",
+            f"@{e}",
+            "0;JMP",
+            f"({t})",
+            "@SP",
+            "A=M-1",
+            "M=-1",
+            f"({e})"
+        ])
+
+    @staticmethod
+    def vm_lt():
+        t = VMTranslator.unique("LT_TRUE")
+        e = VMTranslator.unique("LT_END")
+        return "\n".join([
+            "@SP",
+            "AM=M-1",
+            "D=M",
+            "A=A-1",
+            "D=M-D",
+            f"@{t}",
+            "D;JLT",
+            "@SP",
+            "A=M-1",
+            "M=0",
+            f"@{e}",
+            "0;JMP",
+            f"({t})",
+            "@SP",
+            "A=M-1",
+            "M=-1",
+            f"({e})"
+        ])
+
+    @staticmethod
+    def vm_and():
+        return "\n".join([
+            "@SP",
+            "AM=M-1",
+            "D=M",
+            "A=A-1",
+            "M=M&D"
+        ])
+
+    @staticmethod
+    def vm_or():
+        return "\n".join([
+            "@SP",
+            "AM=M-1",
+            "D=M",
+            "A=A-1",
+            "M=M|D"
+        ])
+
+    @staticmethod
+    def vm_not():
+        return "\n".join([
+            "@SP",
+            "A=M-1",
+            "M=!M"
         ])
 
 
 if __name__ == "__main__":
-    if len(sys.argv)!=2:
-        print("Usage: VMTranslator.py <file.vm>"); sys.exit(1)
-    for line in open(sys.argv[1]):
-        toks = line.strip().split()
-        if not toks or toks[0].startswith("//"):
-            continue
-        cmd = toks[0]
-        if cmd=="push":
-            print(VMTranslator.vm_push(toks[1], toks[2]))
-        elif cmd=="pop":
-            print(VMTranslator.vm_pop(toks[1], toks[2]))
-        elif cmd=="eq":
+    if len(sys.argv) != 2:
+        print("Usage: VMTranslator.py <file.vm>")
+        sys.exit(1)
+
+    for raw in open(sys.argv[1]):
+        line = raw.split("//")[0].strip()
+        if not line: continue
+        cmd, *args = line.split()
+        if cmd == "add":
+            print(VMTranslator.vm_add())
+        elif cmd == "sub":
+            print(VMTranslator.vm_sub())
+        elif cmd == "neg":
+            print(VMTranslator.vm_neg())
+        elif cmd == "eq":
             print(VMTranslator.vm_eq())
-        elif cmd=="gt":
+        elif cmd == "gt":
             print(VMTranslator.vm_gt())
+        elif cmd == "lt":
+            print(VMTranslator.vm_lt())
+        elif cmd == "and":
+            print(VMTranslator.vm_and())
+        elif cmd == "or":
+            print(VMTranslator.vm_or())
+        elif cmd == "not":
+            print(VMTranslator.vm_not())
+        # ignore push/pop/flow for this task
