@@ -1,12 +1,31 @@
-// Runs x = ArrMax.arrMax(y,z) 
-// x, y & z are static variables
-
 function Sys.init 0
 
-push static 1
-push static 2
+// --- Test 00: [21, 12, 43, 34] at RAM[2048] ---
+push constant 2048     // array base
+push constant 4        // length
 call ArrMax.arrMax 2
-pop static 0
+pop temp 0
+set RAM[16] temp 0
 
-label END
-goto END
+// --- Test 01: [43, 12, 4, 10] at RAM[2050] ---
+push constant 2050
+push constant 4
+call ArrMax.arrMax 2
+pop temp 0
+set RAM[16] temp 0
+
+// --- Test 02: [7, 99, 15, 3] at RAM[2060] ---
+push constant 2060
+push constant 4
+call ArrMax.arrMax 2
+pop temp 0
+set RAM[16] temp 0
+
+// --- Test 03: [5, 5, 5, 5] at RAM[2070] ---
+push constant 2070
+push constant 4
+call ArrMax.arrMax 2
+pop temp 0
+set RAM[16] temp 0
+
+return
