@@ -2,167 +2,300 @@
 import sys
 
 class VMTranslator:
-    label_counter = 0
+    # used to generate unique labels for eq/gt/lt
+    label_count = 0
 
     @staticmethod
-    def unique(label):
-        VMTranslator.label_counter += 1
-        return f"{label}${VMTranslator.label_counter}"
+    def _unique(prefix):
+        VMTranslator.label_count += 1
+        return f"{prefix}${VMTranslator.label_count}"
+
+    @staticmethod
+    def vm_push(segment, offset):
+        """Generate Hack Assembly code for a VM push operation"""
+        # constant
+        if segment == "constant":
+            return f"""@{offset}
+D=A
+@SP
+A=M
+M=D
+@SP
+M=M+1"""
+
+        # local, argument, this, that
+        if segment in ("local","argument","this","that"):
+            base = {"local":"LCL","argument":"ARG","this":"THIS","that":"THAT"}[segment]
+            return f"""@{offset}
+D=A
+@{base}
+A=M+D
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1"""
+
+        # temp  (mapped to RAM[5..12])
+        if segment == "temp":
+            addr = 5 + offset
+            return f"""@{addr}
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1"""
+
+        # pointer 0->THIS, 1->THAT
+        if segment == "pointer":
+            sym = "THIS" if offset==0 else "THAT"
+            return f"""@{sym}
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1"""
+
+        # static  (mapped to RAM[16..])
+        if segment == "static":
+            return f"""@16
+D=A
+@{offset}
+A=D+A
+D=M
+@SP
+A=M
+M=D
+@SP
+M=M+1"""
+
+        raise ValueError(f"vm_push: unknown segment '{segment}'")
+
+    @staticmethod
+    def vm_pop(segment, offset):
+        """Generate Hack Assembly code for a VM pop operation"""
+        # local, argument, this, that
+        if segment in ("local","argument","this","that"):
+            base = {"local":"LCL","argument":"ARG","this":"THIS","that":"THAT"}[segment]
+            return f"""@{offset}
+D=A
+@{base}
+D=M+D
+@R13
+M=D
+@SP
+AM=M-1
+D=M
+@R13
+A=M
+M=D"""
+
+        # temp
+        if segment == "temp":
+            addr = 5 + offset
+            return f"""@SP
+AM=M-1
+D=M
+@{addr}
+M=D"""
+
+        # pointer
+        if segment == "pointer":
+            sym = "THIS" if offset==0 else "THAT"
+            return f"""@SP
+AM=M-1
+D=M
+@{sym}
+M=D"""
+
+        # static
+        if segment == "static":
+            return f"""@16
+D=A
+@{offset}
+D=D+A
+@R13
+M=D
+@SP
+AM=M-1
+D=M
+@R13
+A=M
+M=D"""
+
+        if segment == "constant":
+            raise ValueError("Cannot pop to constant")
+
+        raise ValueError(f"vm_pop: unknown segment '{segment}'")
 
     @staticmethod
     def vm_add():
-        return "\n".join([
-            "@SP",      # SP--
-            "AM=M-1",   #   SP = SP-1; A = SP
-            "D=M",      #   D = *SP  (y)
-            "A=A-1",    #   A = SP-1 (address of x)
-            "M=M+D"     #   * (SP-1) = x + y
-        ])
+        """Generate Hack Assembly code for a VM add operation"""
+        return """@SP
+AM=M-1
+D=M
+A=A-1
+M=M+D"""
 
     @staticmethod
     def vm_sub():
-        return "\n".join([
-            "@SP",
-            "AM=M-1",
-            "D=M",      # D = y
-            "A=A-1",
-            "M=M-D"     # x - y
-        ])
+        """Generate Hack Assembly code for a VM sub operation"""
+        return """@SP
+AM=M-1
+D=M
+A=A-1
+M=M-D"""
 
     @staticmethod
     def vm_neg():
-        return "\n".join([
-            "@SP",
-            "A=M-1",    # A = SP-1
-            "M=-M"      # *SP = -*SP
-        ])
+        """Generate Hack Assembly code for a VM neg operation"""
+        return """@SP
+A=M-1
+M=-M"""
 
     @staticmethod
     def vm_eq():
-        t = VMTranslator.unique("EQ_TRUE")
-        e = VMTranslator.unique("EQ_END")
-        return "\n".join([
-            "@SP",
-            "AM=M-1",
-            "D=M",      # D = y
-            "A=A-1",
-            "D=M-D",    # x - y
-            f"@{t}",
-            "D;JEQ",    # if zero, jump EQ_TRUE
-            "@SP",
-            "A=M-1",
-            "M=0",      # false
-            f"@{e}",
-            "0;JMP",
-            f"({t})",
-            "@SP",
-            "A=M-1",
-            "M=-1",     # true
-            f"({e})"
-        ])
+        """Generate Hack Assembly code for a VM eq operation"""
+        label_true = VMTranslator._unique("EQ_TRUE")
+        label_end  = VMTranslator._unique("EQ_END")
+        return f"""@SP
+AM=M-1
+D=M
+A=A-1
+D=M-D
+@{label_true}
+D;JEQ
+@SP
+A=M-1
+M=0
+@{label_end}
+0;JMP
+({label_true})
+@SP
+A=M-1
+M=-1
+({label_end})"""
 
     @staticmethod
     def vm_gt():
-        t = VMTranslator.unique("GT_TRUE")
-        e = VMTranslator.unique("GT_END")
-        return "\n".join([
-            "@SP",
-            "AM=M-1",
-            "D=M",      # D = y
-            "A=A-1",
-            "D=M-D",    # x - y
-            f"@{t}",
-            "D;JGT",    # if >0
-            "@SP",
-            "A=M-1",
-            "M=0",
-            f"@{e}",
-            "0;JMP",
-            f"({t})",
-            "@SP",
-            "A=M-1",
-            "M=-1",
-            f"({e})"
-        ])
+        """Generate Hack Assembly code for a VM gt operation"""
+        label_true = VMTranslator._unique("GT_TRUE")
+        label_end  = VMTranslator._unique("GT_END")
+        return f"""@SP
+AM=M-1
+D=M
+A=A-1
+D=M-D
+@{label_true}
+D;JGT
+@SP
+A=M-1
+M=0
+@{label_end}
+0;JMP
+({label_true})
+@SP
+A=M-1
+M=-1
+({label_end})"""
 
     @staticmethod
     def vm_lt():
-        t = VMTranslator.unique("LT_TRUE")
-        e = VMTranslator.unique("LT_END")
-        return "\n".join([
-            "@SP",
-            "AM=M-1",
-            "D=M",
-            "A=A-1",
-            "D=M-D",
-            f"@{t}",
-            "D;JLT",
-            "@SP",
-            "A=M-1",
-            "M=0",
-            f"@{e}",
-            "0;JMP",
-            f"({t})",
-            "@SP",
-            "A=M-1",
-            "M=-1",
-            f"({e})"
-        ])
+        """Generate Hack Assembly code for a VM lt operation"""
+        label_true = VMTranslator._unique("LT_TRUE")
+        label_end  = VMTranslator._unique("LT_END")
+        return f"""@SP
+AM=M-1
+D=M
+A=A-1
+D=M-D
+@{label_true}
+D;JLT
+@SP
+A=M-1
+M=0
+@{label_end}
+0;JMP
+({label_true})
+@SP
+A=M-1
+M=-1
+({label_end})"""
 
     @staticmethod
     def vm_and():
-        return "\n".join([
-            "@SP",
-            "AM=M-1",
-            "D=M",
-            "A=A-1",
-            "M=M&D"
-        ])
+        """Generate Hack Assembly code for a VM and operation"""
+        return """@SP
+AM=M-1
+D=M
+A=A-1
+M=M&D"""
 
     @staticmethod
     def vm_or():
-        return "\n".join([
-            "@SP",
-            "AM=M-1",
-            "D=M",
-            "A=A-1",
-            "M=M|D"
-        ])
+        """Generate Hack Assembly code for a VM or operation"""
+        return """@SP
+AM=M-1
+D=M
+A=A-1
+M=M|D"""
 
     @staticmethod
     def vm_not():
-        return "\n".join([
-            "@SP",
-            "A=M-1",
-            "M=!M"
-        ])
+        """Generate Hack Assembly code for a VM not operation"""
+        return """@SP
+A=M-1
+M=!M"""
 
+    # The following are *not* required for Part 4—stubbed out:
+    @staticmethod
+    def vm_label(label):      return ""
+    @staticmethod
+    def vm_goto(label):       return ""
+    @staticmethod
+    def vm_if(label):         return ""
+    @staticmethod
+    def vm_function(fn, n):   return ""
+    @staticmethod
+    def vm_return():          return ""
+    @staticmethod
+    def vm_call(fn, n):       return ""
 
+# standalone driver (VM→ASM)
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv)!=2:
         print("Usage: VMTranslator.py <file.vm>")
         sys.exit(1)
-
-    for raw in open(sys.argv[1]):
-        line = raw.split("//")[0].strip()
-        if not line: continue
-        cmd, *args = line.split()
-        if cmd == "add":
+    path = sys.argv[1]
+    for raw in open(path):
+        line = raw.strip()
+        if not line or line.startswith("//"):
+            continue
+        toks = line.split()
+        cmd = toks[0].lower()
+        if cmd=="push":
+            print(VMTranslator.vm_push(toks[1], int(toks[2])))
+        elif cmd=="pop":
+            print(VMTranslator.vm_pop(toks[1], int(toks[2])))
+        elif cmd=="add":
             print(VMTranslator.vm_add())
-        elif cmd == "sub":
+        elif cmd=="sub":
             print(VMTranslator.vm_sub())
-        elif cmd == "neg":
+        elif cmd=="neg":
             print(VMTranslator.vm_neg())
-        elif cmd == "eq":
+        elif cmd=="eq":
             print(VMTranslator.vm_eq())
-        elif cmd == "gt":
+        elif cmd=="gt":
             print(VMTranslator.vm_gt())
-        elif cmd == "lt":
+        elif cmd=="lt":
             print(VMTranslator.vm_lt())
-        elif cmd == "and":
+        elif cmd=="and":
             print(VMTranslator.vm_and())
-        elif cmd == "or":
+        elif cmd=="or":
             print(VMTranslator.vm_or())
-        elif cmd == "not":
+        elif cmd=="not":
             print(VMTranslator.vm_not())
-        # ignore push/pop/flow for this task
+        # ignore other commands

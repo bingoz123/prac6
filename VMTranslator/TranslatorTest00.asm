@@ -17,8 +17,15 @@ AM=M-1
 D=M
 A=A-1
 M=M+D
+@16
+D=A
+@0
+D=D+A
+@R13
+M=D
 @SP
 AM=M-1
 D=M
-@16
+@R13
+A=M
 M=D
