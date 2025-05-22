@@ -1,0 +1,8 @@
+// TranslatorTest08.vm — no jump around, both pushes execute
+push constant 3
+pop static 2
+goto FIN
+label AFTER
+push constant 4
+pop static 2
+label FIN

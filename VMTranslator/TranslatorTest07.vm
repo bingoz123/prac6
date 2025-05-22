@@ -1,0 +1,6 @@
+// TranslatorTest07.vm — labels interspersed with pushes/pops
+push constant 9
+label LOOP
+push constant 8
+pop static 0
+label DONE
