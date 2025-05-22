@@ -1,0 +1,9 @@
+// Test case 02 for VM Translator
+push constant 7
+push constant 3
+add
+pop static 3
+push static 3
+push constant 2
+add
+pop temp 1
